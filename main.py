@@ -233,7 +233,7 @@ with st.sidebar:
     st.caption(f"📍 Tọa độ: {st.session_state.lat:.5f}, {st.session_state.lon:.5f}")
     
     st.markdown("---")
-    st.markdown("### ℹ️ Thang đánh giá (cho Việt Nam)")
+    st.markdown("### ℹ️ Thang đánh giá")
     st.info(
         "🌡️ Nhiệt độ: LT (24-30°C) | Tạm được (22-32°C) | Không (<22°C hoặc >32°C)\n"
         "💧 Độ ẩm: LT (≤65%) | Tạm được (65-75%) | Không (>75%)\n"

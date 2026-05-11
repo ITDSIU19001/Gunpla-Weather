@@ -13,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---------- Dữ liệu tỉnh/thành (lat, lon) ----------
+# ---------- Dữ liệu tỉnh/thành ----------
 PROVINCES: Dict[str, Tuple[float, float]] = {
     "An Giang": (10.5216, 105.1259),
     "Bà Rịa - Vũng Tàu": (10.4114, 107.1379),
@@ -74,8 +74,7 @@ PROVINCES: Dict[str, Tuple[float, float]] = {
     "Yên Bái": (21.7236, 104.8988)
 }
 
-# ---------- Dữ liệu quận/huyện (chỉ một số thành phố lớn) ----------
-# Cấu trúc: province -> {district_name: (lat, lon)}
+# ---------- Dữ liệu quận/huyện (một số thành phố lớn) ----------
 DISTRICTS: Dict[str, Dict[str, Tuple[float, float]]] = {
     "Hà Nội": {
         "Quận Ba Đình": (21.0358, 105.8346),
@@ -87,7 +86,6 @@ DISTRICTS: Dict[str, Dict[str, Tuple[float, float]]] = {
         "Quận Long Biên": (21.0477, 105.8775),
         "Quận Nam Từ Liêm": (21.0047, 105.7582),
         "Quận Bắc Từ Liêm": (21.0796, 105.7616),
-        "Huyện Từ Liêm": (21.0285, 105.8013),  # cũ
     },
     "TP Hồ Chí Minh": {
         "Quận 1": (10.7766, 106.7001),
@@ -109,11 +107,6 @@ DISTRICTS: Dict[str, Dict[str, Tuple[float, float]]] = {
         "Quận Tân Bình": (10.8032, 106.6561),
         "Quận Tân Phú": (10.7895, 106.6276),
         "Quận Thủ Đức": (10.8571, 106.7577),
-        "Huyện Bình Chánh": (10.7213, 106.6689),
-        "Huyện Cần Giờ": (10.4051, 106.9725),
-        "Huyện Củ Chi": (11.0144, 106.4960),
-        "Huyện Hóc Môn": (10.8775, 106.5916),
-        "Huyện Nhà Bè": (10.6689, 106.7428),
     },
     "Đà Nẵng": {
         "Quận Hải Châu": (16.0544, 108.2022),
@@ -122,7 +115,6 @@ DISTRICTS: Dict[str, Dict[str, Tuple[float, float]]] = {
         "Quận Ngũ Hành Sơn": (16.0034, 108.2647),
         "Quận Liên Chiểu": (16.0769, 108.1513),
         "Quận Cẩm Lệ": (16.0080, 108.2079),
-        "Huyện Hòa Vang": (15.9842, 108.1390),
     },
     "Cần Thơ": {
         "Quận Ninh Kiều": (10.0452, 105.7869),
@@ -130,10 +122,6 @@ DISTRICTS: Dict[str, Dict[str, Tuple[float, float]]] = {
         "Quận Cái Răng": (9.9908, 105.7899),
         "Quận Ô Môn": (10.1250, 105.6228),
         "Quận Thốt Nốt": (10.2543, 105.5360),
-        "Huyện Phong Điền": (9.9766, 105.6728),
-        "Huyện Cờ Đỏ": (10.1060, 105.4453),
-        "Huyện Vĩnh Thạnh": (10.2268, 105.4067),
-        "Huyện Thới Lai": (10.0141, 105.5722),
     },
     "Hải Phòng": {
         "Quận Hồng Bàng": (20.8387, 106.6822),
@@ -143,23 +131,16 @@ DISTRICTS: Dict[str, Dict[str, Tuple[float, float]]] = {
         "Quận Kiến An": (20.8080, 106.6355),
         "Quận Đồ Sơn": (20.7061, 106.7837),
         "Quận Dương Kinh": (20.7811, 106.7516),
-        "Huyện An Dương": (20.8879, 106.6012),
-        "Huyện An Lão": (20.8102, 106.5489),
-        "Huyện Kiến Thụy": (20.7517, 106.6939),
-        "Huyện Tiên Lãng": (20.7048, 106.5367),
-        "Huyện Vĩnh Bảo": (20.7205, 106.4160),
-        "Huyện Cát Hải": (20.7849, 106.9676),
-        "Huyện Bạch Long Vĩ": (20.1305, 107.7239),
     }
 }
 
 # ---------- Khởi tạo session state ----------
 if "province" not in st.session_state:
-    st.session_state.province = "TP Hồ Chí Minh"
+    st.session_state.province = "Cần Thơ"
 if "district" not in st.session_state:
     st.session_state.district = "Trung tâm"
 if "lat" not in st.session_state:
-    st.session_state.lat, st.session_state.lon = PROVINCES["TP Hồ Chí Minh"]
+    st.session_state.lat, st.session_state.lon = PROVINCES["Cần Thơ"]
 
 # ---------- Hàm cập nhật tọa độ ----------
 def update_coordinates():
@@ -170,13 +151,52 @@ def update_coordinates():
     else:
         st.session_state.lat, st.session_state.lon = PROVINCES[province]
 
+# ---------- Hàm phân loại từng chỉ số ----------
+def classify_temp(temp: float) -> Tuple[str, str]:
+    if 18 <= temp <= 25:
+        return "🌟 Lý tưởng", "good"
+    elif 18 <= temp <= 30:
+        return "👍 Tạm chấp nhận", "medium"
+    else:
+        return "❌ Không phù hợp", "bad"
+
+def classify_humidity(hum: float) -> Tuple[str, str]:
+    if hum <= 55:
+        return "🌟 Lý tưởng", "good"
+    elif hum <= 65:
+        return "👍 Tạm chấp nhận", "medium"
+    else:
+        return "❌ Không phù hợp", "bad"
+
+def classify_rain(rain: float) -> Tuple[str, str]:
+    if rain < 0.1:
+        return "🌟 Lý tưởng", "good"
+    elif rain < 0.2:
+        return "👍 Tạm chấp nhận", "medium"
+    else:
+        return "❌ Không phù hợp", "bad"
+
+def get_overall_status(temp_class, hum_class, rain_class) -> Tuple[str, str]:
+    # Xem có "bad" không
+    if "bad" in (temp_class, hum_class, rain_class):
+        return "❌ Không nên sơn", "bad"
+    elif all(c == "good" for c in (temp_class, hum_class, rain_class)):
+        return "✅ Xuất sắc, lý tưởng để sơn", "excellent"
+    else:
+        return "⚠️ Có thể sơn, nhưng cần cân nhắc", "medium"
+
+# ---------- Ngưỡng cho giờ phù hợp (dùng mức "Tạm chấp nhận") ----------
+SUITABLE_TEMP_MIN = 18
+SUITABLE_TEMP_MAX = 30
+SUITABLE_HUM_MAX = 65
+SUITABLE_RAIN_MAX = 0.2
+
 # ---------- Sidebar ----------
 with st.sidebar:
     st.markdown("## 🎨 Gunpla Spray")
     st.markdown("---")
     
     st.markdown("### 📍 Địa điểm")
-    
     # Dropdown tỉnh/thành
     province_list = list(PROVINCES.keys())
     selected_province = st.selectbox(
@@ -187,18 +207,16 @@ with st.sidebar:
     )
     if selected_province != st.session_state.province:
         st.session_state.province = selected_province
-        # Reset district về "Trung tâm"
         st.session_state.district = "Trung tâm"
         update_coordinates()
         st.rerun()
     
-    # Dropdown quận/huyện (chỉ khi tỉnh có dữ liệu quận)
+    # Dropdown quận/huyện
     district_options = ["Trung tâm"]
     if st.session_state.province in DISTRICTS:
         district_options.extend(DISTRICTS[st.session_state.province].keys())
-    
     selected_district = st.selectbox(
-        "Quận / Huyện (nếu có)",
+        "Quận / Huyện",
         options=district_options,
         index=district_options.index(st.session_state.district) if st.session_state.district in district_options else 0,
         key="district_selector"
@@ -211,32 +229,23 @@ with st.sidebar:
     st.caption(f"📍 Tọa độ: {st.session_state.lat:.5f}, {st.session_state.lon:.5f}")
     
     st.markdown("---")
-    st.markdown("### ⚙️ Điều kiện sơn")
-    col1, col2 = st.columns(2)
-    with col1:
-        temp_min = st.number_input("🌡️ Nhiệt độ min (°C)", value=18.0, step=0.5)
-        hum_max = st.number_input("💧 Độ ẩm max (%)", value=65, step=1)
-    with col2:
-        temp_max = st.number_input("🌡️ Nhiệt độ max (°C)", value=30.0, step=0.5)
-        rain_max = st.number_input("☔ Mưa max (mm/h)", value=0.2, step=0.1)
+    st.markdown("### ℹ️ Thang đánh giá")
+    st.info(
+        "🌡️ Nhiệt độ: Lý tưởng (18-25°C) | Tạm chấp nhận (18-30°C) | Không phù hợp (còn lại)\n"
+        "💧 Độ ẩm: Lý tưởng (≤55%) | Tạm chấp nhận (≤65%) | Không phù hợp (>65%)\n"
+        "☔ Mưa: Lý tưởng (<0.1mm/h) | Tạm chấp nhận (<0.2mm/h) | Không phù hợp (≥0.2mm/h)"
+    )
     
     if st.button("🔄 Cập nhật thời tiết", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
-
-conditions = {
-    "temp_min": temp_min,
-    "temp_max": temp_max,
-    "hum_max": hum_max,
-    "rain_max": rain_max
-}
 
 lat = st.session_state.lat
 lon = st.session_state.lon
 province_display = st.session_state.province
 district_display = st.session_state.district
 
-# ---------- Custom CSS (giữ nguyên như cũ, không thay đổi) ----------
+# ---------- Custom CSS (giữ nguyên) ----------
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700&display=swap');
@@ -263,23 +272,17 @@ st.markdown("""
     .info-chip-item { display: flex; align-items: center; gap: 10px; color: #cbd5e1; font-size: 0.9rem; }
     .footer-note { margin-top: 2rem; font-size: 0.75rem; color: #4d5e87; text-align: center; border-top: 1px dashed #28324e; padding-top: 1.2rem; }
     label { color: #b3c2e2 !important; }
+    .status-badge { padding: 4px 12px; border-radius: 40px; font-size: 0.8rem; font-weight: 600; display: inline-block; }
+    .status-good { background: #1a3a32; color: #8effd2; border: 1px solid #2e9b7c; }
+    .status-medium { background: #4d3a1a; color: #ffe3a4; border: 1px solid #d4a13e; }
+    .status-bad { background: #441f2c; color: #ff9c9c; border: 1px solid #c54f5f; }
+    .status-excellent { background: #0f4c3a; color: #b9f6ca; border: 1px solid #4caf7a; }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------- Main UI ----------
 st.markdown('<h1 class="custom-title"><i class="fas fa-spray-can-sparkles"></i> Gunpla Spray Day</h1>', unsafe_allow_html=True)
 st.markdown('<div style="text-align: center"><div class="custom-subhead">Kiểm tra thời tiết, giờ phù hợp và dự báo 3 ngày</div></div>', unsafe_allow_html=True)
-
-# Info chips
-st.markdown(f"""
-<div style="display: flex; justify-content: center;">
-    <div class="info-chip">
-        <div class="info-chip-item"><i class="fas fa-thermometer-half"></i> <span>{temp_min}–{temp_max} °C</span></div>
-        <div class="info-chip-item"><i class="fas fa-droplet"></i> <span>≤ {hum_max}%</span></div>
-        <div class="info-chip-item"><i class="fas fa-cloud-rain"></i> <span>Mưa < {rain_max} mm</span></div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
 
 # ---------- Hàm helper ----------
 @st.cache_data(ttl=1800)
@@ -321,10 +324,10 @@ def group_consecutive_hours(hour_strings: List[str]) -> List[str]:
         ranges.append(f"{start:02d}:00-{prev:02d}:00")
     return ranges
 
-def is_suitable(temp, humidity, rain, temp_min, temp_max, hum_max, rain_max):
-    return (temp_min <= temp <= temp_max) and (humidity <= hum_max) and (rain < rain_max)
+def is_suitable(temp, humidity, rain):
+    return (SUITABLE_TEMP_MIN <= temp <= SUITABLE_TEMP_MAX) and (humidity <= SUITABLE_HUM_MAX) and (rain < SUITABLE_RAIN_MAX)
 
-def process_hourly_data(hourly, target_date, conditions):
+def process_hourly_data(hourly, target_date):
     times = hourly["time"]
     temps = hourly["temperature_2m"]
     hums = hourly["relative_humidity_2m"]
@@ -332,7 +335,7 @@ def process_hourly_data(hourly, target_date, conditions):
     rows = []
     for t, tmp, hum, rn in zip(times, temps, hums, rains):
         if t.startswith(target_date):
-            suitable = is_suitable(tmp, hum, rn, conditions["temp_min"], conditions["temp_max"], conditions["hum_max"], conditions["rain_max"])
+            suitable = is_suitable(tmp, hum, rn)
             rows.append({
                 "time": t,
                 "hour_label": t.split("T")[1][:5],
@@ -358,38 +361,42 @@ current = data["current"]
 hourly = data["hourly"]
 daily = data["daily"]
 
-# ---------- Thời tiết hiện tại ----------
-st.subheader("🌡️ Thời tiết hiện tại")
+# ---------- Phân loại các chỉ số hiện tại ----------
+temp_val = current["temperature_2m"]
+hum_val = current["relative_humidity_2m"]
+rain_val = current["precipitation"] or 0.0
+
+temp_label, temp_class = classify_temp(temp_val)
+hum_label, hum_class = classify_humidity(hum_val)
+rain_label, rain_class = classify_rain(rain_val)
+overall_label, overall_class = get_overall_status(temp_class, hum_class, rain_class)
+
+# ---------- Hiển thị thời tiết hiện tại với đánh giá ----------
+st.subheader("🌡️ Thời tiết hiện tại & đánh giá")
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    st.metric("Nhiệt độ", f"{current['temperature_2m']} °C")
+    st.metric("Nhiệt độ", f"{temp_val} °C")
+    st.markdown(f'<span class="status-badge status-{temp_class}">{temp_label}</span>', unsafe_allow_html=True)
 with col2:
-    st.metric("Độ ẩm", f"{current['relative_humidity_2m']} %")
+    st.metric("Độ ẩm", f"{hum_val} %")
+    st.markdown(f'<span class="status-badge status-{hum_class}">{hum_label}</span>', unsafe_allow_html=True)
 with col3:
-    st.metric("Lượng mưa", f"{current['precipitation'] or 0:.1f} mm")
+    st.metric("Lượng mưa", f"{rain_val:.1f} mm")
+    st.markdown(f'<span class="status-badge status-{rain_class}">{rain_label}</span>', unsafe_allow_html=True)
 with col4:
     st.metric("Tốc độ gió", f"{current['wind_speed_10m']} m/s")
 
-temp_ok = conditions["temp_min"] <= current["temperature_2m"] <= conditions["temp_max"]
-hum_ok = current["relative_humidity_2m"] <= conditions["hum_max"]
-rain_ok = (current["precipitation"] or 0) < conditions["rain_max"]
-all_ok = temp_ok and hum_ok and rain_ok
-
-if all_ok:
-    st.success("✅ **Hôm nay là thời điểm phù hợp để sơn Gunpla!**")
+# Đánh giá chung
+if overall_class == "excellent":
+    st.success(f"✅ **{overall_label}**")
+elif overall_class == "medium":
+    st.warning(f"⚠️ **{overall_label}**")
 else:
-    reasons = []
-    if not temp_ok:
-        reasons.append(f"Nhiệt độ {current['temperature_2m']}°C ngoài khoảng {temp_min}–{temp_max}°C")
-    if not hum_ok:
-        reasons.append(f"Độ ẩm {current['relative_humidity_2m']}% > {hum_max}%")
-    if not rain_ok:
-        reasons.append(f"Mưa {(current['precipitation'] or 0):.1f}mm ≥ {rain_max}mm")
-    st.error(f"❌ **Không phù hợp để sơn**\n\n- " + "\n- ".join(reasons))
+    st.error(f"❌ **{overall_label}**")
 
-# ---------- Giờ phù hợp hôm nay ----------
+# ---------- Giờ phù hợp hôm nay (dựa trên ngưỡng Tạm chấp nhận) ----------
 today_str = datetime.now().strftime("%Y-%m-%d")
-df_today = process_hourly_data(hourly, today_str, conditions)
+df_today = process_hourly_data(hourly, today_str)
 today_ranges = get_suitable_ranges(df_today)
 
 st.subheader("🕒 Giờ phù hợp hôm nay")
@@ -432,7 +439,7 @@ days = daily["time"]
 forecast_data = []
 for i, day_str in enumerate(days):
     day_name = datetime.strptime(day_str, "%Y-%m-%d").strftime("%a, %d/%m")
-    df_day = process_hourly_data(hourly, day_str, conditions)
+    df_day = process_hourly_data(hourly, day_str)
     ranges = get_suitable_ranges(df_day)
     forecast_data.append({
         "date": day_str,

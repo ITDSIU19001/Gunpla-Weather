@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
-from typing import List, Dict
+from typing import List
 
 # ---------- Cấu hình trang ----------
 st.set_page_config(
@@ -13,287 +13,107 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---------- Custom CSS ----------
+# ---------- JavaScript tự động lấy vị trí khi chưa có tọa độ ----------
 st.markdown("""
-<style>
-    /* Import font đẹp */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700&display=swap');
-    
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
+<script>
+    // Kiểm tra nếu URL chưa có tham số lat, lon
+    const urlParams = new URLSearchParams(window.location.search);
+    if (!urlParams.has('lat') || !urlParams.has('lon')) {
+        // Yêu cầu vị trí
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    // Chuyển hướng đến cùng URL nhưng thêm lat, lon
+                    const newUrl = new URL(window.location.href);
+                    newUrl.searchParams.set('lat', lat);
+                    newUrl.searchParams.set('lon', lon);
+                    window.location.href = newUrl.toString();
+                },
+                (error) => {
+                    // Lỗi: dùng tọa độ mặc định (Cần Thơ)
+                    console.error('Lỗi lấy vị trí:', error);
+                    const defaultLat = 10.072732;
+                    const defaultLon = 105.806206;
+                    const newUrl = new URL(window.location.href);
+                    newUrl.searchParams.set('lat', defaultLat);
+                    newUrl.searchParams.set('lon', defaultLon);
+                    window.location.href = newUrl.toString();
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        } else {
+            // Trình duyệt không hỗ trợ, dùng mặc định
+            const defaultLat = 10.072732;
+            const defaultLon = 105.806206;
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.set('lat', defaultLat);
+            newUrl.searchParams.set('lon', defaultLon);
+            window.location.href = newUrl.toString();
+        }
     }
-    
-    /* Background gradient động */
-    .stApp {
-        background: linear-gradient(135deg, #0b0f1c 0%, #1a1f33 100%);
-        background-attachment: fixed;
-    }
-    
-    /* Tùy chỉnh sidebar */
-    [data-testid="stSidebar"] {
-        background: rgba(20, 25, 45, 0.8);
-        backdrop-filter: blur(16px);
-        border-right: 1px solid rgba(255,255,255,0.08);
-    }
-    
-    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
-        color: #eef4ff;
-    }
-    
-    /* Custom scrollbar */
-    ::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
-    }
-    ::-webkit-scrollbar-track {
-        background: #1e2642;
-        border-radius: 10px;
-    }
-    ::-webkit-scrollbar-thumb {
-        background: #4d608b;
-        border-radius: 10px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-        background: #6d85b9;
-    }
-    
-    /* Card style cho metric */
-    div[data-testid="stMetric"] {
-        background: rgba(14, 20, 36, 0.7);
-        backdrop-filter: blur(4px);
-        border: 1px solid #2c3855;
-        border-radius: 24px;
-        padding: 1rem;
-        box-shadow: 0 8px 16px -8px rgba(0,0,0,0.4);
-        transition: all 0.2s;
-    }
-    div[data-testid="stMetric"]:hover {
-        transform: translateY(-2px);
-        border-color: #5f7bbf;
-        box-shadow: 0 12px 20px -12px #000000cc;
-    }
-    
-    /* Nút bấm chính */
-    .stButton > button {
-        background: linear-gradient(95deg, #2e3b5e 0%, #1f2a44 100%);
-        border: none;
-        border-bottom: 3px solid #0f1424;
-        color: white;
-        font-weight: 600;
-        border-radius: 48px;
-        padding: 0.6rem 1.2rem;
-        transition: all 0.2s;
-        width: 100%;
-    }
-    .stButton > button:hover {
-        background: linear-gradient(95deg, #3e4c73 0%, #2e3b5e 100%);
-        transform: translateY(-2px);
-        border-bottom-width: 4px;
-    }
-    .stButton > button:active {
-        transform: translateY(2px);
-        border-bottom-width: 2px;
-    }
-    
-    /* Badge điều kiện */
-    .condition-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 6px 14px;
-        border-radius: 40px;
-        font-size: 0.85rem;
-        font-weight: 600;
-    }
-    .badge-good {
-        background: #1a3a32;
-        color: #8effd2;
-        border: 1px solid #2e9b7c;
-    }
-    .badge-bad {
-        background: #441f2c;
-        color: #ff9c9c;
-        border: 1px solid #c54f5f;
-    }
-    
-    /* Card dự báo */
-    .forecast-card-custom {
-        background: rgba(14, 20, 36, 0.8);
-        backdrop-filter: blur(8px);
-        border-radius: 28px;
-        padding: 1.2rem;
-        border: 1px solid #2c3855;
-        transition: all 0.25s ease;
-        cursor: pointer;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-    }
-    .forecast-card-custom:hover {
-        transform: translateY(-5px);
-        border-color: #5f7bbf;
-        box-shadow: 0 20px 25px -12px black;
-    }
-    
-    /* Suitable hour chips */
-    .suitable-chip {
-        display: inline-block;
-        background: #1f2a44;
-        padding: 4px 12px;
-        border-radius: 24px;
-        margin: 4px 4px 0 0;
-        font-size: 0.8rem;
-        font-weight: 500;
-        color: #c9dcff;
-        border: 1px solid #3e5270;
-    }
-    
-    /* Expander style */
-    .streamlit-expanderHeader {
-        background: rgba(30, 38, 66, 0.6);
-        border-radius: 40px;
-        font-weight: 500;
-    }
-    
-    /* Tiêu đề */
-    .custom-title {
-        text-align: center;
-        background: linear-gradient(135deg, #f0e9d8, #c9d4ff);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-size: 2.5rem;
-        font-weight: 700;
-        margin-bottom: 0;
-    }
-    .custom-subhead {
-        text-align: center;
-        color: #a9b4d4;
-        margin-bottom: 2rem;
-        border-bottom: 1px dashed #2f3a5c;
-        display: inline-block;
-        padding-bottom: 0.5rem;
-    }
-    
-    /* Info chip */
-    .info-chip {
-        background: #1e2642;
-        border-radius: 60px;
-        padding: 12px 20px;
-        display: inline-flex;
-        flex-wrap: wrap;
-        gap: 20px;
-        justify-content: center;
-        margin-bottom: 1.5rem;
-        border: 1px solid #334155;
-    }
-    .info-chip-item {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        color: #cbd5e1;
-        font-size: 0.9rem;
-    }
-    
-    /* Footer */
-    .footer-note {
-        margin-top: 2rem;
-        font-size: 0.75rem;
-        color: #4d5e87;
-        text-align: center;
-        border-top: 1px dashed #28324e;
-        padding-top: 1.2rem;
-    }
-    
-    /* Điều chỉnh màu chữ trong sidebar */
-    .css-1d391kg, .css-1633s36, .stNumberInput input {
-        color: #eef4ff !important;
-    }
-    label {
-        color: #b3c2e2 !important;
-    }
-</style>
+</script>
 """, unsafe_allow_html=True)
 
 # ---------- Đọc tọa độ từ query params ----------
 params = st.query_params
 if "lat" in params and "lon" in params:
     try:
-        query_lat = float(params["lat"][0]) if isinstance(params["lat"], list) else float(params["lat"])
-        query_lon = float(params["lon"][0]) if isinstance(params["lon"], list) else float(params["lon"])
-        if -90 <= query_lat <= 90 and -180 <= query_lon <= 180:
-            default_lat = query_lat
-            default_lon = query_lon
-        else:
-            default_lat = 10.072732
-            default_lon = 105.806206
+        lat = float(params["lat"][0]) if isinstance(params["lat"], list) else float(params["lat"])
+        lon = float(params["lon"][0]) if isinstance(params["lon"], list) else float(params["lon"])
+        # Kiểm tra hợp lệ
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            lat, lon = 10.072732, 105.806206
     except Exception:
-        default_lat = 10.072732
-        default_lon = 105.806206
+        lat, lon = 10.072732, 105.806206
 else:
-    default_lat = 10.072732
-    default_lon = 105.806206
+    # Trường hợp không có tham số (có thể do script chưa kịp chạy)
+    # Nhưng script sẽ redirect, nên đây là fallback an toàn
+    lat, lon = 10.072732, 105.806206
+
+# ---------- Custom CSS (giữ nguyên phần đẹp) ----------
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700&display=swap');
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    .stApp { background: linear-gradient(135deg, #0b0f1c 0%, #1a1f33 100%); background-attachment: fixed; }
+    [data-testid="stSidebar"] { background: rgba(20, 25, 45, 0.8); backdrop-filter: blur(16px); border-right: 1px solid rgba(255,255,255,0.08); }
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 { color: #eef4ff; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #1e2642; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb { background: #4d608b; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #6d85b9; }
+    div[data-testid="stMetric"] { background: rgba(14, 20, 36, 0.7); backdrop-filter: blur(4px); border: 1px solid #2c3855; border-radius: 24px; padding: 1rem; box-shadow: 0 8px 16px -8px rgba(0,0,0,0.4); transition: all 0.2s; }
+    div[data-testid="stMetric"]:hover { transform: translateY(-2px); border-color: #5f7bbf; box-shadow: 0 12px 20px -12px #000000cc; }
+    .stButton > button { background: linear-gradient(95deg, #2e3b5e 0%, #1f2a44 100%); border: none; border-bottom: 3px solid #0f1424; color: white; font-weight: 600; border-radius: 48px; padding: 0.6rem 1.2rem; transition: all 0.2s; width: 100%; }
+    .stButton > button:hover { background: linear-gradient(95deg, #3e4c73 0%, #2e3b5e 100%); transform: translateY(-2px); border-bottom-width: 4px; }
+    .stButton > button:active { transform: translateY(2px); border-bottom-width: 2px; }
+    .condition-badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 40px; font-size: 0.85rem; font-weight: 600; }
+    .badge-good { background: #1a3a32; color: #8effd2; border: 1px solid #2e9b7c; }
+    .badge-bad { background: #441f2c; color: #ff9c9c; border: 1px solid #c54f5f; }
+    .forecast-card-custom { background: rgba(14, 20, 36, 0.8); backdrop-filter: blur(8px); border-radius: 28px; padding: 1.2rem; border: 1px solid #2c3855; transition: all 0.25s ease; cursor: pointer; height: 100%; display: flex; flex-direction: column; }
+    .forecast-card-custom:hover { transform: translateY(-5px); border-color: #5f7bbf; box-shadow: 0 20px 25px -12px black; }
+    .suitable-chip { display: inline-block; background: #1f2a44; padding: 4px 12px; border-radius: 24px; margin: 4px 4px 0 0; font-size: 0.8rem; font-weight: 500; color: #c9dcff; border: 1px solid #3e5270; }
+    .streamlit-expanderHeader { background: rgba(30, 38, 66, 0.6); border-radius: 40px; font-weight: 500; }
+    .custom-title { text-align: center; background: linear-gradient(135deg, #f0e9d8, #c9d4ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2.5rem; font-weight: 700; margin-bottom: 0; }
+    .custom-subhead { text-align: center; color: #a9b4d4; margin-bottom: 2rem; border-bottom: 1px dashed #2f3a5c; display: inline-block; padding-bottom: 0.5rem; }
+    .info-chip { background: #1e2642; border-radius: 60px; padding: 12px 20px; display: inline-flex; flex-wrap: wrap; gap: 20px; justify-content: center; margin-bottom: 1.5rem; border: 1px solid #334155; }
+    .info-chip-item { display: flex; align-items: center; gap: 10px; color: #cbd5e1; font-size: 0.9rem; }
+    .footer-note { margin-top: 2rem; font-size: 0.75rem; color: #4d5e87; text-align: center; border-top: 1px dashed #28324e; padding-top: 1.2rem; }
+    label { color: #b3c2e2 !important; }
+</style>
+""", unsafe_allow_html=True)
 
 # ---------- Sidebar ----------
 with st.sidebar:
     st.markdown("## 🎨 Gunpla Spray")
     st.markdown("---")
     
-    # Nút lấy vị trí hiện tại (HTML/JS)
-    st.markdown("""
-    <div id="geo-btn-container" style="margin-bottom: 1rem;">
-        <button id="getLocationBtn" style="
-            background: linear-gradient(95deg, #2e3b5e 0%, #1f2a44 100%);
-            border: none;
-            border-bottom: 3px solid #0f1424;
-            color: white;
-            font-weight: 600;
-            padding: 0.6rem 1rem;
-            width: 100%;
-            border-radius: 48px;
-            cursor: pointer;
-            transition: 0.15s;
-            font-size: 1rem;
-        ">
-            📍 Sử dụng vị trí hiện tại
-        </button>
-    </div>
-    <script>
-        const btn = document.getElementById('getLocationBtn');
-        if (btn) {
-            btn.addEventListener('click', () => {
-                if (!navigator.geolocation) {
-                    alert('Trình duyệt không hỗ trợ Geolocation.');
-                    return;
-                }
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        const lat = position.coords.latitude;
-                        const lon = position.coords.longitude;
-                        const url = new URL(window.location.href);
-                        url.searchParams.set('lat', lat);
-                        url.searchParams.set('lon', lon);
-                        window.location.href = url.toString();
-                    },
-                    (error) => {
-                        let msg = 'Không thể lấy vị trí: ';
-                        switch(error.code) {
-                            case error.PERMISSION_DENIED: msg += 'Bạn đã từ chối cấp quyền.'; break;
-                            case error.POSITION_UNAVAILABLE: msg += 'Không có thông tin vị trí.'; break;
-                            case error.TIMEOUT: msg += 'Quá thời gian chờ.'; break;
-                            default: msg += error.message;
-                        }
-                        alert(msg);
-                    },
-                    { enableHighAccuracy: true, timeout: 10000 }
-                );
-            });
-        }
-    </script>
-    """, unsafe_allow_html=True)
-    
-    lat = st.number_input("Vĩ độ", value=default_lat, format="%.6f", key="lat_input")
-    lon = st.number_input("Kinh độ", value=default_lon, format="%.6f", key="lon_input")
-    st.caption("📍 Mặc định: Cần Thơ")
+    # Hiển thị tọa độ hiện tại (có thể chỉnh sửa thủ công)
+    lat = st.number_input("Vĩ độ", value=lat, format="%.6f", key="lat_input")
+    lon = st.number_input("Kinh độ", value=lon, format="%.6f", key="lon_input")
+    st.caption("📍 Tọa độ hiện tại (có thể thay đổi)")
     
     st.markdown("---")
     st.markdown("### ⚙️ Điều kiện sơn")
@@ -456,7 +276,6 @@ if today_ranges:
     fig.add_trace(go.Scatter(x=df_today["hour_label"], y=df_today["humidity"],
                              mode='lines+markers', name='Độ ẩm (%)',
                              line=dict(color='#78b6ff', width=3), marker=dict(size=6), yaxis='y2'))
-    # Highlight vùng phù hợp
     suitable_hours = df_today[df_today["suitable"]]["hour_label"].tolist()
     for sh in suitable_hours:
         fig.add_vrect(x0=sh, x1=sh, line_width=0, fillcolor="green", opacity=0.2, layer="below")
@@ -500,7 +319,6 @@ for i, day_str in enumerate(days):
 cols = st.columns(3)
 for idx, fc in enumerate(forecast_data):
     with cols[idx % 3]:
-        # Icon mapping
         code = fc["weathercode"]
         if code == 0:
             icon = "☀️"

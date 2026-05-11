@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 # ---------- Cấu hình trang ----------
 st.set_page_config(
@@ -13,107 +13,75 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---------- JavaScript tự động lấy vị trí khi chưa có tọa độ ----------
-st.markdown("""
-<script>
-    // Kiểm tra nếu URL chưa có tham số lat, lon
-    const urlParams = new URLSearchParams(window.location.search);
-    if (!urlParams.has('lat') || !urlParams.has('lon')) {
-        // Yêu cầu vị trí
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
-                    // Chuyển hướng đến cùng URL nhưng thêm lat, lon
-                    const newUrl = new URL(window.location.href);
-                    newUrl.searchParams.set('lat', lat);
-                    newUrl.searchParams.set('lon', lon);
-                    window.location.href = newUrl.toString();
-                },
-                (error) => {
-                    // Lỗi: dùng tọa độ mặc định (Cần Thơ)
-                    console.error('Lỗi lấy vị trí:', error);
-                    const defaultLat = 10.072732;
-                    const defaultLon = 105.806206;
-                    const newUrl = new URL(window.location.href);
-                    newUrl.searchParams.set('lat', defaultLat);
-                    newUrl.searchParams.set('lon', defaultLon);
-                    window.location.href = newUrl.toString();
-                },
-                { enableHighAccuracy: true, timeout: 10000 }
-            );
-        } else {
-            // Trình duyệt không hỗ trợ, dùng mặc định
-            const defaultLat = 10.072732;
-            const defaultLon = 105.806206;
-            const newUrl = new URL(window.location.href);
-            newUrl.searchParams.set('lat', defaultLat);
-            newUrl.searchParams.set('lon', defaultLon);
-            window.location.href = newUrl.toString();
-        }
+# ---------- Hàm geocoding ----------
+@st.cache_data(ttl=86400)  # cache 1 ngày
+def geocode_address(address: str) -> Optional[tuple]:
+    """Chuyển địa chỉ thành (lat, lon) dùng Nominatim API."""
+    if not address.strip():
+        return None
+    url = "https://nominatim.openstreetmap.org/search"
+    params = {
+        "q": address,
+        "format": "json",
+        "limit": 1,
+        "addressdetails": 0
     }
-</script>
-""", unsafe_allow_html=True)
-
-# ---------- Đọc tọa độ từ query params ----------
-params = st.query_params
-if "lat" in params and "lon" in params:
+    headers = {
+        "User-Agent": "GunplaSprayApp/1.0 (your-email@example.com)"
+    }
     try:
-        lat = float(params["lat"][0]) if isinstance(params["lat"], list) else float(params["lat"])
-        lon = float(params["lon"][0]) if isinstance(params["lon"], list) else float(params["lon"])
-        # Kiểm tra hợp lệ
-        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
-            lat, lon = 10.072732, 105.806206
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        if data:
+            lat = float(data[0]["lat"])
+            lon = float(data[0]["lon"])
+            return (lat, lon)
+        else:
+            return None
     except Exception:
-        lat, lon = 10.072732, 105.806206
-else:
-    # Trường hợp không có tham số (có thể do script chưa kịp chạy)
-    # Nhưng script sẽ redirect, nên đây là fallback an toàn
-    lat, lon = 10.072732, 105.806206
+        return None
 
-# ---------- Custom CSS (giữ nguyên phần đẹp) ----------
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700&display=swap');
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-    .stApp { background: linear-gradient(135deg, #0b0f1c 0%, #1a1f33 100%); background-attachment: fixed; }
-    [data-testid="stSidebar"] { background: rgba(20, 25, 45, 0.8); backdrop-filter: blur(16px); border-right: 1px solid rgba(255,255,255,0.08); }
-    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 { color: #eef4ff; }
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #1e2642; border-radius: 10px; }
-    ::-webkit-scrollbar-thumb { background: #4d608b; border-radius: 10px; }
-    ::-webkit-scrollbar-thumb:hover { background: #6d85b9; }
-    div[data-testid="stMetric"] { background: rgba(14, 20, 36, 0.7); backdrop-filter: blur(4px); border: 1px solid #2c3855; border-radius: 24px; padding: 1rem; box-shadow: 0 8px 16px -8px rgba(0,0,0,0.4); transition: all 0.2s; }
-    div[data-testid="stMetric"]:hover { transform: translateY(-2px); border-color: #5f7bbf; box-shadow: 0 12px 20px -12px #000000cc; }
-    .stButton > button { background: linear-gradient(95deg, #2e3b5e 0%, #1f2a44 100%); border: none; border-bottom: 3px solid #0f1424; color: white; font-weight: 600; border-radius: 48px; padding: 0.6rem 1.2rem; transition: all 0.2s; width: 100%; }
-    .stButton > button:hover { background: linear-gradient(95deg, #3e4c73 0%, #2e3b5e 100%); transform: translateY(-2px); border-bottom-width: 4px; }
-    .stButton > button:active { transform: translateY(2px); border-bottom-width: 2px; }
-    .condition-badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 40px; font-size: 0.85rem; font-weight: 600; }
-    .badge-good { background: #1a3a32; color: #8effd2; border: 1px solid #2e9b7c; }
-    .badge-bad { background: #441f2c; color: #ff9c9c; border: 1px solid #c54f5f; }
-    .forecast-card-custom { background: rgba(14, 20, 36, 0.8); backdrop-filter: blur(8px); border-radius: 28px; padding: 1.2rem; border: 1px solid #2c3855; transition: all 0.25s ease; cursor: pointer; height: 100%; display: flex; flex-direction: column; }
-    .forecast-card-custom:hover { transform: translateY(-5px); border-color: #5f7bbf; box-shadow: 0 20px 25px -12px black; }
-    .suitable-chip { display: inline-block; background: #1f2a44; padding: 4px 12px; border-radius: 24px; margin: 4px 4px 0 0; font-size: 0.8rem; font-weight: 500; color: #c9dcff; border: 1px solid #3e5270; }
-    .streamlit-expanderHeader { background: rgba(30, 38, 66, 0.6); border-radius: 40px; font-weight: 500; }
-    .custom-title { text-align: center; background: linear-gradient(135deg, #f0e9d8, #c9d4ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2.5rem; font-weight: 700; margin-bottom: 0; }
-    .custom-subhead { text-align: center; color: #a9b4d4; margin-bottom: 2rem; border-bottom: 1px dashed #2f3a5c; display: inline-block; padding-bottom: 0.5rem; }
-    .info-chip { background: #1e2642; border-radius: 60px; padding: 12px 20px; display: inline-flex; flex-wrap: wrap; gap: 20px; justify-content: center; margin-bottom: 1.5rem; border: 1px solid #334155; }
-    .info-chip-item { display: flex; align-items: center; gap: 10px; color: #cbd5e1; font-size: 0.9rem; }
-    .footer-note { margin-top: 2rem; font-size: 0.75rem; color: #4d5e87; text-align: center; border-top: 1px dashed #28324e; padding-top: 1.2rem; }
-    label { color: #b3c2e2 !important; }
-</style>
-""", unsafe_allow_html=True)
+# ---------- Khởi tạo session state ----------
+if "lat" not in st.session_state:
+    st.session_state.lat = 10.072732
+if "lon" not in st.session_state:
+    st.session_state.lon = 105.806206
+if "address_input" not in st.session_state:
+    st.session_state.address_input = "Cần Thơ"
 
 # ---------- Sidebar ----------
 with st.sidebar:
     st.markdown("## 🎨 Gunpla Spray")
     st.markdown("---")
     
-    # Hiển thị tọa độ hiện tại (có thể chỉnh sửa thủ công)
-    lat = st.number_input("Vĩ độ", value=lat, format="%.6f", key="lat_input")
-    lon = st.number_input("Kinh độ", value=lon, format="%.6f", key="lon_input")
-    st.caption("📍 Tọa độ hiện tại (có thể thay đổi)")
+    st.markdown("### 📍 Địa chỉ của bạn")
+    address = st.text_input(
+        "Phường, quận, thành phố",
+        value=st.session_state.address_input,
+        key="address_input_widget",
+        placeholder="Ví dụ: Ninh Kiều, Cần Thơ"
+    )
+    
+    col_geo1, col_geo2 = st.columns([3, 1])
+    with col_geo1:
+        if st.button("🔍 Lấy tọa độ từ địa chỉ", use_container_width=True):
+            with st.spinner("Đang tra cứu..."):
+                coords = geocode_address(address)
+                if coords:
+                    st.session_state.lat, st.session_state.lon = coords
+                    st.session_state.address_input = address
+                    st.success(f"Đã lấy tọa độ: {coords[0]:.5f}, {coords[1]:.5f}")
+                else:
+                    st.error("Không tìm thấy địa chỉ. Vui lòng nhập rõ hơn (ví dụ: Ninh Kiều, Cần Thơ)")
+    with col_geo2:
+        if st.button("🔄 Mặc định", use_container_width=True):
+            st.session_state.lat = 10.072732
+            st.session_state.lon = 105.806206
+            st.session_state.address_input = "Cần Thơ"
+            st.rerun()
+    
+    st.caption(f"📍 Tọa độ hiện tại: {st.session_state.lat:.5f}, {st.session_state.lon:.5f}")
     
     st.markdown("---")
     st.markdown("### ⚙️ Điều kiện sơn")
@@ -136,7 +104,55 @@ conditions = {
     "rain_max": rain_max
 }
 
-# ---------- Helper functions ----------
+lat = st.session_state.lat
+lon = st.session_state.lon
+
+# ---------- Custom CSS (giữ nguyên phần đẹp) ----------
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700&display=swap');
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    .stApp { background: linear-gradient(135deg, #0b0f1c 0%, #1a1f33 100%); background-attachment: fixed; }
+    [data-testid="stSidebar"] { background: rgba(20, 25, 45, 0.8); backdrop-filter: blur(16px); border-right: 1px solid rgba(255,255,255,0.08); }
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 { color: #eef4ff; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #1e2642; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb { background: #4d608b; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #6d85b9; }
+    div[data-testid="stMetric"] { background: rgba(14, 20, 36, 0.7); backdrop-filter: blur(4px); border: 1px solid #2c3855; border-radius: 24px; padding: 1rem; box-shadow: 0 8px 16px -8px rgba(0,0,0,0.4); transition: all 0.2s; }
+    div[data-testid="stMetric"]:hover { transform: translateY(-2px); border-color: #5f7bbf; box-shadow: 0 12px 20px -12px #000000cc; }
+    .stButton > button { background: linear-gradient(95deg, #2e3b5e 0%, #1f2a44 100%); border: none; border-bottom: 3px solid #0f1424; color: white; font-weight: 600; border-radius: 48px; padding: 0.6rem 1.2rem; transition: all 0.2s; width: 100%; }
+    .stButton > button:hover { background: linear-gradient(95deg, #3e4c73 0%, #2e3b5e 100%); transform: translateY(-2px); border-bottom-width: 4px; }
+    .stButton > button:active { transform: translateY(2px); border-bottom-width: 2px; }
+    .forecast-card-custom { background: rgba(14, 20, 36, 0.8); backdrop-filter: blur(8px); border-radius: 28px; padding: 1.2rem; border: 1px solid #2c3855; transition: all 0.25s ease; cursor: pointer; height: 100%; display: flex; flex-direction: column; }
+    .forecast-card-custom:hover { transform: translateY(-5px); border-color: #5f7bbf; box-shadow: 0 20px 25px -12px black; }
+    .suitable-chip { display: inline-block; background: #1f2a44; padding: 4px 12px; border-radius: 24px; margin: 4px 4px 0 0; font-size: 0.8rem; font-weight: 500; color: #c9dcff; border: 1px solid #3e5270; }
+    .streamlit-expanderHeader { background: rgba(30, 38, 66, 0.6); border-radius: 40px; font-weight: 500; }
+    .custom-title { text-align: center; background: linear-gradient(135deg, #f0e9d8, #c9d4ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2.5rem; font-weight: 700; margin-bottom: 0; }
+    .custom-subhead { text-align: center; color: #a9b4d4; margin-bottom: 2rem; border-bottom: 1px dashed #2f3a5c; display: inline-block; padding-bottom: 0.5rem; }
+    .info-chip { background: #1e2642; border-radius: 60px; padding: 12px 20px; display: inline-flex; flex-wrap: wrap; gap: 20px; justify-content: center; margin-bottom: 1.5rem; border: 1px solid #334155; }
+    .info-chip-item { display: flex; align-items: center; gap: 10px; color: #cbd5e1; font-size: 0.9rem; }
+    .footer-note { margin-top: 2rem; font-size: 0.75rem; color: #4d5e87; text-align: center; border-top: 1px dashed #28324e; padding-top: 1.2rem; }
+    label { color: #b3c2e2 !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# ---------- Main UI ----------
+st.markdown('<h1 class="custom-title"><i class="fas fa-spray-can-sparkles"></i> Gunpla Spray Day</h1>', unsafe_allow_html=True)
+st.markdown('<div style="text-align: center"><div class="custom-subhead">Kiểm tra thời tiết, giờ phù hợp và dự báo 3 ngày</div></div>', unsafe_allow_html=True)
+
+# Info chips
+st.markdown(f"""
+<div style="display: flex; justify-content: center;">
+    <div class="info-chip">
+        <div class="info-chip-item"><i class="fas fa-thermometer-half"></i> <span>{temp_min}–{temp_max} °C</span></div>
+        <div class="info-chip-item"><i class="fas fa-droplet"></i> <span>≤ {hum_max}%</span></div>
+        <div class="info-chip-item"><i class="fas fa-cloud-rain"></i> <span>Mưa < {rain_max} mm</span></div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ---------- Hàm helper cho thời tiết ----------
 @st.cache_data(ttl=1800)
 def fetch_weather_data(lat: float, lon: float):
     url = "https://api.open-meteo.com/v1/forecast"
@@ -202,22 +218,7 @@ def get_suitable_ranges(df):
     suitable_hours = df[df["suitable"]]["hour_label"].tolist()
     return group_consecutive_hours(suitable_hours)
 
-# ---------- Main UI ----------
-st.markdown('<h1 class="custom-title"><i class="fas fa-spray-can-sparkles"></i> Gunpla Spray Day</h1>', unsafe_allow_html=True)
-st.markdown('<div style="text-align: center"><div class="custom-subhead">Kiểm tra thời tiết, giờ phù hợp và dự báo 3 ngày</div></div>', unsafe_allow_html=True)
-
-# Info chips
-st.markdown(f"""
-<div style="display: flex; justify-content: center;">
-    <div class="info-chip">
-        <div class="info-chip-item"><i class="fas fa-thermometer-half"></i> <span>{temp_min}–{temp_max} °C</span></div>
-        <div class="info-chip-item"><i class="fas fa-droplet"></i> <span>≤ {hum_max}%</span></div>
-        <div class="info-chip-item"><i class="fas fa-cloud-rain"></i> <span>Mưa < {rain_max} mm</span></div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# Fetch data
+# ---------- Lấy dữ liệu thời tiết ----------
 try:
     data = fetch_weather_data(lat, lon)
 except Exception as e:
@@ -228,7 +229,7 @@ current = data["current"]
 hourly = data["hourly"]
 daily = data["daily"]
 
-# Thời tiết hiện tại
+# ---------- Thời tiết hiện tại ----------
 st.subheader("🌡️ Thời tiết hiện tại")
 col1, col2, col3, col4 = st.columns(4)
 with col1:
@@ -257,7 +258,7 @@ else:
         reasons.append(f"Mưa {(current['precipitation'] or 0):.1f}mm ≥ {rain_max}mm")
     st.error(f"❌ **Không phù hợp để sơn**\n\n- " + "\n- ".join(reasons))
 
-# Giờ phù hợp hôm nay
+# ---------- Giờ phù hợp hôm nay ----------
 today_str = datetime.now().strftime("%Y-%m-%d")
 df_today = process_hourly_data(hourly, today_str, conditions)
 today_ranges = get_suitable_ranges(df_today)
@@ -296,7 +297,7 @@ if today_ranges:
 else:
     st.warning("⚠️ Không có giờ nào phù hợp để sơn trong hôm nay.")
 
-# Dự báo 3 ngày
+# ---------- Dự báo 3 ngày ----------
 st.subheader("🗓️ Dự báo 3 ngày tới")
 days = daily["time"]
 forecast_data = []
@@ -362,11 +363,12 @@ for idx, fc in enumerate(forecast_data):
         
         st.markdown("</div>", unsafe_allow_html=True)
 
-# Footer
+# ---------- Footer ----------
 st.markdown(f"""
 <div class="footer-note">
-    <i class="fas fa-map-marker-alt"></i> Tọa độ: {lat:.6f}, {lon:.6f} &nbsp;|&nbsp;
-    <i class="fas fa-database"></i> Dữ liệu: Open-Meteo &nbsp;|&nbsp;
+    <i class="fas fa-map-marker-alt"></i> Địa chỉ: {address} &nbsp;|&nbsp;
+    <i class="fas fa-globe"></i> Tọa độ: {lat:.5f}, {lon:.5f} &nbsp;|&nbsp;
+    <i class="fas fa-database"></i> Dữ liệu: Open-Meteo + Nominatim &nbsp;|&nbsp;
     <i class="fas fa-clock"></i> {datetime.now().strftime('%H:%M:%S %d/%m/%Y')}
 </div>
 """, unsafe_allow_html=True)

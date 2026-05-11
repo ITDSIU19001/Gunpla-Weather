@@ -142,7 +142,6 @@ if "district" not in st.session_state:
 if "lat" not in st.session_state:
     st.session_state.lat, st.session_state.lon = PROVINCES["Cần Thơ"]
 
-# ---------- Hàm cập nhật tọa độ ----------
 def update_coordinates():
     province = st.session_state.province
     district = st.session_state.district
@@ -151,19 +150,19 @@ def update_coordinates():
     else:
         st.session_state.lat, st.session_state.lon = PROVINCES[province]
 
-# ---------- Hàm phân loại từng chỉ số ----------
+# ---------- Phân loại dựa trên thang đánh giá Việt Nam ----------
 def classify_temp(temp: float) -> Tuple[str, str]:
-    if 18 <= temp <= 25:
+    if 24 <= temp <= 30:
         return "🌟 Lý tưởng", "good"
-    elif 18 <= temp <= 30:
+    elif 22 <= temp <= 32:
         return "👍 Tạm chấp nhận", "medium"
     else:
         return "❌ Không phù hợp", "bad"
 
 def classify_humidity(hum: float) -> Tuple[str, str]:
-    if hum <= 55:
+    if hum <= 65:
         return "🌟 Lý tưởng", "good"
-    elif hum <= 65:
+    elif hum <= 75:
         return "👍 Tạm chấp nhận", "medium"
     else:
         return "❌ Không phù hợp", "bad"
@@ -176,28 +175,34 @@ def classify_rain(rain: float) -> Tuple[str, str]:
     else:
         return "❌ Không phù hợp", "bad"
 
-def get_overall_status(temp_class, hum_class, rain_class) -> Tuple[str, str]:
-    # Xem có "bad" không
-    if "bad" in (temp_class, hum_class, rain_class):
-        return "❌ Không nên sơn", "bad"
-    elif all(c == "good" for c in (temp_class, hum_class, rain_class)):
-        return "✅ Xuất sắc, lý tưởng để sơn", "excellent"
+def classify_uv(uv: float) -> Tuple[str, str]:
+    if uv < 3:
+        return "🌟 Lý tưởng", "good"
+    elif uv <= 5:
+        return "👍 Tạm chấp nhận", "medium"
     else:
-        return "⚠️ Có thể sơn, nhưng cần cân nhắc", "medium"
+        return "❌ Không phù hợp (có hại)", "bad"
 
-# ---------- Ngưỡng cho giờ phù hợp (dùng mức "Tạm chấp nhận") ----------
-SUITABLE_TEMP_MIN = 18
-SUITABLE_TEMP_MAX = 30
-SUITABLE_HUM_MAX = 65
+def get_overall_status(temp_class, hum_class, rain_class, uv_class) -> Tuple[str, str]:
+    if "bad" in (temp_class, hum_class, rain_class, uv_class):
+        return "❌ Không nên sơn ngoài trời", "bad"
+    elif all(c == "good" for c in (temp_class, hum_class, rain_class, uv_class)):
+        return "✅ Tuyệt vời! Rất lý tưởng để sơn", "excellent"
+    else:
+        return "⚠️ Có thể sơn, nhưng cần thận trọng", "medium"
+
+# ---------- Ngưỡng "Tạm chấp nhận" cho giờ phù hợp ----------
+SUITABLE_TEMP_MIN = 22
+SUITABLE_TEMP_MAX = 32
+SUITABLE_HUM_MAX = 75
 SUITABLE_RAIN_MAX = 0.2
+# UV không dùng để lọc giờ phù hợp, chỉ cảnh báo
 
 # ---------- Sidebar ----------
 with st.sidebar:
     st.markdown("## 🎨 Gunpla Spray")
     st.markdown("---")
-    
     st.markdown("### 📍 Địa điểm")
-    # Dropdown tỉnh/thành
     province_list = list(PROVINCES.keys())
     selected_province = st.selectbox(
         "Tỉnh / Thành phố",
@@ -211,7 +216,6 @@ with st.sidebar:
         update_coordinates()
         st.rerun()
     
-    # Dropdown quận/huyện
     district_options = ["Trung tâm"]
     if st.session_state.province in DISTRICTS:
         district_options.extend(DISTRICTS[st.session_state.province].keys())
@@ -229,11 +233,12 @@ with st.sidebar:
     st.caption(f"📍 Tọa độ: {st.session_state.lat:.5f}, {st.session_state.lon:.5f}")
     
     st.markdown("---")
-    st.markdown("### ℹ️ Thang đánh giá")
+    st.markdown("### ℹ️ Thang đánh giá (cho Việt Nam)")
     st.info(
-        "🌡️ Nhiệt độ: Lý tưởng (18-25°C) | Tạm chấp nhận (18-30°C) | Không phù hợp (còn lại)\n"
-        "💧 Độ ẩm: Lý tưởng (≤55%) | Tạm chấp nhận (≤65%) | Không phù hợp (>65%)\n"
-        "☔ Mưa: Lý tưởng (<0.1mm/h) | Tạm chấp nhận (<0.2mm/h) | Không phù hợp (≥0.2mm/h)"
+        "🌡️ Nhiệt độ: LT (24-30°C) | Tạm được (22-32°C) | Không (<22°C hoặc >32°C)\n"
+        "💧 Độ ẩm: LT (≤65%) | Tạm được (65-75%) | Không (>75%)\n"
+        "☔ Mưa: LT (<0.1mm/h) | Tạm được (0.1-0.2mm/h) | Không (≥0.2mm/h)\n"
+        "☀️ UV: LT (<3) | Tạm được (3-5) | Không (>5) - gây hại sơn"
     )
     
     if st.button("🔄 Cập nhật thời tiết", use_container_width=True):
@@ -245,7 +250,7 @@ lon = st.session_state.lon
 province_display = st.session_state.province
 district_display = st.session_state.district
 
-# ---------- Custom CSS (giữ nguyên) ----------
+# ---------- Custom CSS ----------
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700&display=swap');
@@ -282,7 +287,7 @@ st.markdown("""
 
 # ---------- Main UI ----------
 st.markdown('<h1 class="custom-title"><i class="fas fa-spray-can-sparkles"></i> Gunpla Spray Day</h1>', unsafe_allow_html=True)
-st.markdown('<div style="text-align: center"><div class="custom-subhead">Kiểm tra thời tiết, giờ phù hợp và dự báo 3 ngày</div></div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align: center"><div class="custom-subhead">Kiểm tra thời tiết, giờ phù hợp và dự báo 3 ngày (có UV)</div></div>', unsafe_allow_html=True)
 
 # ---------- Hàm helper ----------
 @st.cache_data(ttl=1800)
@@ -291,9 +296,9 @@ def fetch_weather_data(lat: float, lon: float):
     params = {
         "latitude": lat,
         "longitude": lon,
-        "current": "temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m",
+        "current": "temperature_2m,relative_humidity_2m,precipitation,uv_index",
         "hourly": "temperature_2m,relative_humidity_2m,precipitation",
-        "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum,relative_humidity_2m_max,weathercode",
+        "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum,relative_humidity_2m_max,uv_index_max,weathercode",
         "timezone": "auto",
         "forecast_days": 3
     }
@@ -361,17 +366,19 @@ current = data["current"]
 hourly = data["hourly"]
 daily = data["daily"]
 
-# ---------- Phân loại các chỉ số hiện tại ----------
+# ---------- Phân loại chỉ số hiện tại ----------
 temp_val = current["temperature_2m"]
 hum_val = current["relative_humidity_2m"]
 rain_val = current["precipitation"] or 0.0
+uv_val = current["uv_index"]
 
 temp_label, temp_class = classify_temp(temp_val)
 hum_label, hum_class = classify_humidity(hum_val)
 rain_label, rain_class = classify_rain(rain_val)
-overall_label, overall_class = get_overall_status(temp_class, hum_class, rain_class)
+uv_label, uv_class = classify_uv(uv_val)
+overall_label, overall_class = get_overall_status(temp_class, hum_class, rain_class, uv_class)
 
-# ---------- Hiển thị thời tiết hiện tại với đánh giá ----------
+# ---------- Hiển thị thời tiết hiện tại ----------
 st.subheader("🌡️ Thời tiết hiện tại & đánh giá")
 col1, col2, col3, col4 = st.columns(4)
 with col1:
@@ -384,9 +391,9 @@ with col3:
     st.metric("Lượng mưa", f"{rain_val:.1f} mm")
     st.markdown(f'<span class="status-badge status-{rain_class}">{rain_label}</span>', unsafe_allow_html=True)
 with col4:
-    st.metric("Tốc độ gió", f"{current['wind_speed_10m']} m/s")
+    st.metric("Chỉ số UV", f"{uv_val:.1f}")
+    st.markdown(f'<span class="status-badge status-{uv_class}">{uv_label}</span>', unsafe_allow_html=True)
 
-# Đánh giá chung
 if overall_class == "excellent":
     st.success(f"✅ **{overall_label}**")
 elif overall_class == "medium":
@@ -394,12 +401,12 @@ elif overall_class == "medium":
 else:
     st.error(f"❌ **{overall_label}**")
 
-# ---------- Giờ phù hợp hôm nay (dựa trên ngưỡng Tạm chấp nhận) ----------
+# ---------- Giờ phù hợp hôm nay ----------
 today_str = datetime.now().strftime("%Y-%m-%d")
 df_today = process_hourly_data(hourly, today_str)
 today_ranges = get_suitable_ranges(df_today)
 
-st.subheader("🕒 Giờ phù hợp hôm nay")
+st.subheader("🕒 Giờ phù hợp hôm nay (dựa trên ngưỡng tạm chấp nhận)")
 if today_ranges:
     cols = st.columns(min(len(today_ranges), 4))
     for i, rng in enumerate(today_ranges):
@@ -441,6 +448,7 @@ for i, day_str in enumerate(days):
     day_name = datetime.strptime(day_str, "%Y-%m-%d").strftime("%a, %d/%m")
     df_day = process_hourly_data(hourly, day_str)
     ranges = get_suitable_ranges(df_day)
+    uv_max = daily["uv_index_max"][i]  # chỉ số UV max trong ngày
     forecast_data.append({
         "date": day_str,
         "day_name": day_name,
@@ -448,6 +456,7 @@ for i, day_str in enumerate(days):
         "temp_max": daily["temperature_2m_max"][i],
         "precip_sum": daily["precipitation_sum"][i],
         "hum_max": daily["relative_humidity_2m_max"][i],
+        "uv_max": uv_max,
         "weathercode": daily["weathercode"][i],
         "suitable_ranges": ranges,
         "df_hourly": df_day
@@ -474,15 +483,20 @@ for idx, fc in enumerate(forecast_data):
         else:
             icon = "☁️"
         
+        uv_label, uv_class = classify_uv(fc["uv_max"])
+        
         st.markdown(f"""
         <div class="forecast-card-custom">
             <h3 style="text-align:center; margin:0">{fc['day_name']} {icon}</h3>
             <p style="text-align:center; margin:0.5rem 0">
                 🌡️ {fc['temp_min']:.0f}° / {fc['temp_max']:.0f}°<br>
                 💧 max {fc['hum_max']:.0f}%<br>
-                ☔ {fc['precip_sum']:.1f} mm
+                ☔ {fc['precip_sum']:.1f} mm<br>
+                ☀️ UV max {fc['uv_max']:.1f}
             </p>
         """, unsafe_allow_html=True)
+        # Thêm badge UV đánh giá
+        st.markdown(f'<div style="text-align:center"><span class="status-badge status-{uv_class}">UV: {uv_label}</span></div>', unsafe_allow_html=True)
         
         if fc["suitable_ranges"]:
             chips = "".join([f'<span class="suitable-chip">🟢 {r}</span>' for r in fc["suitable_ranges"]])

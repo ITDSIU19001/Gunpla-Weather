@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Tuple
 
 # ---------- Cấu hình trang ----------
 st.set_page_config(
@@ -13,75 +13,95 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---------- Hàm geocoding ----------
-@st.cache_data(ttl=86400)  # cache 1 ngày
-def geocode_address(address: str) -> Optional[tuple]:
-    """Chuyển địa chỉ thành (lat, lon) dùng Nominatim API."""
-    if not address.strip():
-        return None
-    url = "https://nominatim.openstreetmap.org/search"
-    params = {
-        "q": address,
-        "format": "json",
-        "limit": 1,
-        "addressdetails": 0
-    }
-    headers = {
-        "User-Agent": "GunplaSprayApp/1.0 (your-email@example.com)"
-    }
-    try:
-        resp = requests.get(url, params=params, headers=headers, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        if data:
-            lat = float(data[0]["lat"])
-            lon = float(data[0]["lon"])
-            return (lat, lon)
-        else:
-            return None
-    except Exception:
-        return None
+# ---------- Dữ liệu địa phương (tỉnh/thành + tọa độ) ----------
+LOCATIONS = {
+    "An Giang": (10.5216, 105.1259),
+    "Bà Rịa - Vũng Tàu": (10.4114, 107.1379),
+    "Bạc Liêu": (9.2941, 105.7278),
+    "Bắc Ninh": (21.1861, 106.0763),
+    "Bến Tre": (10.2417, 106.3759),
+    "Bình Dương": (10.9805, 106.6523),
+    "Bình Phước": (11.7514, 106.9159),
+    "Bình Thuận": (10.9778, 108.2685),
+    "Cà Mau": (9.1805, 105.1505),
+    "Cần Thơ": (10.0727, 105.8062),
+    "Đà Nẵng": (16.0544, 108.2022),
+    "Đắk Lắk": (12.6665, 108.0381),
+    "Đồng Nai": (10.9989, 106.8103),
+    "Đồng Tháp": (10.4938, 105.6882),
+    "Gia Lai": (13.9829, 108.0121),
+    "Hà Giang": (22.7669, 105.0286),
+    "Hà Nam": (20.5835, 105.9223),
+    "Hà Nội": (21.0285, 105.8542),
+    "Hà Tĩnh": (18.3557, 105.8878),
+    "Hải Dương": (20.9412, 106.3155),
+    "Hải Phòng": (20.8449, 106.6881),
+    "Hậu Giang": (9.7847, 105.4692),
+    "Hòa Bình": (20.6861, 105.2555),
+    "Hưng Yên": (20.8521, 106.0942),
+    "Khánh Hòa": (12.2584, 109.1853),
+    "Kiên Giang": (10.0239, 105.0152),
+    "Kon Tum": (14.3493, 108.0091),
+    "Lai Châu": (22.3865, 103.6103),
+    "Lâm Đồng": (11.5755, 108.1429),
+    "Lạng Sơn": (21.8526, 106.7619),
+    "Lào Cai": (22.4856, 103.9665),
+    "Long An": (10.7010, 106.4232),
+    "Nam Định": (20.4386, 106.1621),
+    "Nghệ An": (19.4803, 105.7019),
+    "Ninh Bình": (20.2459, 105.9805),
+    "Ninh Thuận": (11.6739, 108.8629),
+    "Phú Thọ": (21.2689, 105.2041),
+    "Phú Yên": (13.0886, 109.0929),
+    "Quảng Bình": (17.4684, 106.6226),
+    "Quảng Nam": (15.5178, 108.2521),
+    "Quảng Ngãi": (15.1195, 108.7933),
+    "Quảng Ninh": (20.9530, 107.0513),
+    "Quảng Trị": (16.7689, 107.0276),
+    "Sóc Trăng": (9.6025, 105.9739),
+    "Sơn La": (21.3278, 103.9135),
+    "Tây Ninh": (11.3199, 106.1047),
+    "Thái Bình": (20.4467, 106.3426),
+    "Thái Nguyên": (21.5936, 105.8460),
+    "Thanh Hóa": (19.8067, 105.7801),
+    "Thừa Thiên Huế": (16.4637, 107.5909),
+    "Tiền Giang": (10.3764, 106.3416),
+    "TP Hồ Chí Minh": (10.8231, 106.6297),
+    "Trà Vinh": (9.9519, 106.3410),
+    "Tuyên Quang": (21.8235, 105.2125),
+    "Vĩnh Long": (10.2505, 105.9724),
+    "Vĩnh Phúc": (21.3051, 105.5937),
+    "Yên Bái": (21.7236, 104.8988)
+}
 
 # ---------- Khởi tạo session state ----------
+if "location_name" not in st.session_state:
+    st.session_state.location_name = "Cần Thơ"
 if "lat" not in st.session_state:
-    st.session_state.lat = 10.072732
-if "lon" not in st.session_state:
-    st.session_state.lon = 105.806206
-if "address_input" not in st.session_state:
-    st.session_state.address_input = "Cần Thơ"
+    st.session_state.lat, st.session_state.lon = LOCATIONS["Cần Thơ"]
 
 # ---------- Sidebar ----------
 with st.sidebar:
     st.markdown("## 🎨 Gunpla Spray")
     st.markdown("---")
     
-    st.markdown("### 📍 Địa chỉ của bạn")
-    address = st.text_input(
-        "Phường, quận, thành phố",
-        value=st.session_state.address_input,
-        key="address_input_widget",
-        placeholder="Ví dụ: Ninh Kiều, Cần Thơ"
+    st.markdown("### 📍 Chọn địa phương")
+    # Dropdown danh sách tỉnh/thành
+    location_names = list(LOCATIONS.keys())
+    selected_location = st.selectbox(
+        "Tỉnh / Thành phố",
+        options=location_names,
+        index=location_names.index(st.session_state.location_name),
+        key="location_select"
     )
     
-    col_geo1, col_geo2 = st.columns([3, 1])
-    with col_geo1:
-        if st.button("🔍 Lấy tọa độ từ địa chỉ", use_container_width=True):
-            with st.spinner("Đang tra cứu..."):
-                coords = geocode_address(address)
-                if coords:
-                    st.session_state.lat, st.session_state.lon = coords
-                    st.session_state.address_input = address
-                    st.success(f"Đã lấy tọa độ: {coords[0]:.5f}, {coords[1]:.5f}")
-                else:
-                    st.error("Không tìm thấy địa chỉ. Vui lòng nhập rõ hơn (ví dụ: Ninh Kiều, Cần Thơ)")
-    with col_geo2:
-        if st.button("🔄 Mặc định", use_container_width=True):
-            st.session_state.lat = 10.072732
-            st.session_state.lon = 105.806206
-            st.session_state.address_input = "Cần Thơ"
-            st.rerun()
+    # Nếu chọn địa phương mới, cập nhật tọa độ
+    if selected_location != st.session_state.location_name:
+        st.session_state.location_name = selected_location
+        st.session_state.lat, st.session_state.lon = LOCATIONS[selected_location]
+        st.rerun()
     
-    st.caption(f"📍 Tọa độ hiện tại: {st.session_state.lat:.5f}, {st.session_state.lon:.5f}")
+    st.caption(f"📍 Tọa độ: {st.session_state.lat:.5f}, {st.session_state.lon:.5f}")
     
     st.markdown("---")
     st.markdown("### ⚙️ Điều kiện sơn")
@@ -106,8 +126,9 @@ conditions = {
 
 lat = st.session_state.lat
 lon = st.session_state.lon
+location_display = st.session_state.location_name
 
-# ---------- Custom CSS (giữ nguyên phần đẹp) ----------
+# ---------- Custom CSS ----------
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700&display=swap');
@@ -152,7 +173,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ---------- Hàm helper cho thời tiết ----------
+# ---------- Hàm helper ----------
 @st.cache_data(ttl=1800)
 def fetch_weather_data(lat: float, lon: float):
     url = "https://api.open-meteo.com/v1/forecast"
@@ -366,9 +387,9 @@ for idx, fc in enumerate(forecast_data):
 # ---------- Footer ----------
 st.markdown(f"""
 <div class="footer-note">
-    <i class="fas fa-map-marker-alt"></i> Địa chỉ: {address} &nbsp;|&nbsp;
+    <i class="fas fa-map-marker-alt"></i> Địa phương: {location_display} &nbsp;|&nbsp;
     <i class="fas fa-globe"></i> Tọa độ: {lat:.5f}, {lon:.5f} &nbsp;|&nbsp;
-    <i class="fas fa-database"></i> Dữ liệu: Open-Meteo + Nominatim &nbsp;|&nbsp;
+    <i class="fas fa-database"></i> Dữ liệu: Open-Meteo &nbsp;|&nbsp;
     <i class="fas fa-clock"></i> {datetime.now().strftime('%H:%M:%S %d/%m/%Y')}
 </div>
 """, unsafe_allow_html=True)

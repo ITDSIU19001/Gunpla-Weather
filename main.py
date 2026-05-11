@@ -155,11 +155,11 @@ DISTRICTS: Dict[str, Dict[str, Tuple[float, float]]] = {
 
 # ---------- Khởi tạo session state ----------
 if "province" not in st.session_state:
-    st.session_state.province = "Cần Thơ"
+    st.session_state.province = "TP Hồ Chí Minh"
 if "district" not in st.session_state:
     st.session_state.district = "Trung tâm"
 if "lat" not in st.session_state:
-    st.session_state.lat, st.session_state.lon = PROVINCES["Cần Thơ"]
+    st.session_state.lat, st.session_state.lon = PROVINCES["TP Hồ Chí Minh"]
 
 # ---------- Hàm cập nhật tọa độ ----------
 def update_coordinates():

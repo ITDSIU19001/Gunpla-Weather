@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
-from typing import List, Tuple
+from typing import List, Dict, Tuple
 
 # ---------- Cấu hình trang ----------
 st.set_page_config(
@@ -13,8 +13,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---------- Dữ liệu địa phương (tỉnh/thành + tọa độ) ----------
-LOCATIONS = {
+# ---------- Dữ liệu tỉnh/thành (lat, lon) ----------
+PROVINCES: Dict[str, Tuple[float, float]] = {
     "An Giang": (10.5216, 105.1259),
     "Bà Rịa - Vũng Tàu": (10.4114, 107.1379),
     "Bạc Liêu": (9.2941, 105.7278),
@@ -74,31 +74,138 @@ LOCATIONS = {
     "Yên Bái": (21.7236, 104.8988)
 }
 
+# ---------- Dữ liệu quận/huyện (chỉ một số thành phố lớn) ----------
+# Cấu trúc: province -> {district_name: (lat, lon)}
+DISTRICTS: Dict[str, Dict[str, Tuple[float, float]]] = {
+    "Hà Nội": {
+        "Quận Ba Đình": (21.0358, 105.8346),
+        "Quận Hoàn Kiếm": (21.0285, 105.8542),
+        "Quận Hai Bà Trưng": (21.0067, 105.8611),
+        "Quận Đống Đa": (21.0147, 105.8245),
+        "Quận Thanh Xuân": (20.9968, 105.8141),
+        "Quận Cầu Giấy": (21.0285, 105.8013),
+        "Quận Long Biên": (21.0477, 105.8775),
+        "Quận Nam Từ Liêm": (21.0047, 105.7582),
+        "Quận Bắc Từ Liêm": (21.0796, 105.7616),
+        "Huyện Từ Liêm": (21.0285, 105.8013),  # cũ
+    },
+    "TP Hồ Chí Minh": {
+        "Quận 1": (10.7766, 106.7001),
+        "Quận 2": (10.7909, 106.7565),
+        "Quận 3": (10.7844, 106.6859),
+        "Quận 4": (10.7626, 106.7029),
+        "Quận 5": (10.7545, 106.6701),
+        "Quận 6": (10.7465, 106.6406),
+        "Quận 7": (10.7310, 106.7175),
+        "Quận 8": (10.7240, 106.6305),
+        "Quận 9": (10.8484, 106.7810),
+        "Quận 10": (10.7760, 106.6721),
+        "Quận 11": (10.7643, 106.6500),
+        "Quận 12": (10.8603, 106.6576),
+        "Quận Bình Tân": (10.7540, 106.6026),
+        "Quận Bình Thạnh": (10.8095, 106.7064),
+        "Quận Gò Vấp": (10.8349, 106.6753),
+        "Quận Phú Nhuận": (10.8004, 106.6794),
+        "Quận Tân Bình": (10.8032, 106.6561),
+        "Quận Tân Phú": (10.7895, 106.6276),
+        "Quận Thủ Đức": (10.8571, 106.7577),
+        "Huyện Bình Chánh": (10.7213, 106.6689),
+        "Huyện Cần Giờ": (10.4051, 106.9725),
+        "Huyện Củ Chi": (11.0144, 106.4960),
+        "Huyện Hóc Môn": (10.8775, 106.5916),
+        "Huyện Nhà Bè": (10.6689, 106.7428),
+    },
+    "Đà Nẵng": {
+        "Quận Hải Châu": (16.0544, 108.2022),
+        "Quận Thanh Khê": (16.0587, 108.1797),
+        "Quận Sơn Trà": (16.0742, 108.2440),
+        "Quận Ngũ Hành Sơn": (16.0034, 108.2647),
+        "Quận Liên Chiểu": (16.0769, 108.1513),
+        "Quận Cẩm Lệ": (16.0080, 108.2079),
+        "Huyện Hòa Vang": (15.9842, 108.1390),
+    },
+    "Cần Thơ": {
+        "Quận Ninh Kiều": (10.0452, 105.7869),
+        "Quận Bình Thủy": (10.0706, 105.7682),
+        "Quận Cái Răng": (9.9908, 105.7899),
+        "Quận Ô Môn": (10.1250, 105.6228),
+        "Quận Thốt Nốt": (10.2543, 105.5360),
+        "Huyện Phong Điền": (9.9766, 105.6728),
+        "Huyện Cờ Đỏ": (10.1060, 105.4453),
+        "Huyện Vĩnh Thạnh": (10.2268, 105.4067),
+        "Huyện Thới Lai": (10.0141, 105.5722),
+    },
+    "Hải Phòng": {
+        "Quận Hồng Bàng": (20.8387, 106.6822),
+        "Quận Ngô Quyền": (20.8484, 106.6914),
+        "Quận Lê Chân": (20.8402, 106.6932),
+        "Quận Hải An": (20.8192, 106.7319),
+        "Quận Kiến An": (20.8080, 106.6355),
+        "Quận Đồ Sơn": (20.7061, 106.7837),
+        "Quận Dương Kinh": (20.7811, 106.7516),
+        "Huyện An Dương": (20.8879, 106.6012),
+        "Huyện An Lão": (20.8102, 106.5489),
+        "Huyện Kiến Thụy": (20.7517, 106.6939),
+        "Huyện Tiên Lãng": (20.7048, 106.5367),
+        "Huyện Vĩnh Bảo": (20.7205, 106.4160),
+        "Huyện Cát Hải": (20.7849, 106.9676),
+        "Huyện Bạch Long Vĩ": (20.1305, 107.7239),
+    }
+}
+
 # ---------- Khởi tạo session state ----------
-if "location_name" not in st.session_state:
-    st.session_state.location_name = "Cần Thơ"
+if "province" not in st.session_state:
+    st.session_state.province = "Cần Thơ"
+if "district" not in st.session_state:
+    st.session_state.district = "Trung tâm"
 if "lat" not in st.session_state:
-    st.session_state.lat, st.session_state.lon = LOCATIONS["Cần Thơ"]
+    st.session_state.lat, st.session_state.lon = PROVINCES["Cần Thơ"]
+
+# ---------- Hàm cập nhật tọa độ ----------
+def update_coordinates():
+    province = st.session_state.province
+    district = st.session_state.district
+    if district != "Trung tâm" and province in DISTRICTS and district in DISTRICTS[province]:
+        st.session_state.lat, st.session_state.lon = DISTRICTS[province][district]
+    else:
+        st.session_state.lat, st.session_state.lon = PROVINCES[province]
 
 # ---------- Sidebar ----------
 with st.sidebar:
     st.markdown("## 🎨 Gunpla Spray")
     st.markdown("---")
     
-    st.markdown("### 📍 Chọn địa phương")
-    # Dropdown danh sách tỉnh/thành
-    location_names = list(LOCATIONS.keys())
-    selected_location = st.selectbox(
-        "Tỉnh / Thành phố",
-        options=location_names,
-        index=location_names.index(st.session_state.location_name),
-        key="location_select"
-    )
+    st.markdown("### 📍 Địa điểm")
     
-    # Nếu chọn địa phương mới, cập nhật tọa độ
-    if selected_location != st.session_state.location_name:
-        st.session_state.location_name = selected_location
-        st.session_state.lat, st.session_state.lon = LOCATIONS[selected_location]
+    # Dropdown tỉnh/thành
+    province_list = list(PROVINCES.keys())
+    selected_province = st.selectbox(
+        "Tỉnh / Thành phố",
+        options=province_list,
+        index=province_list.index(st.session_state.province),
+        key="province_selector"
+    )
+    if selected_province != st.session_state.province:
+        st.session_state.province = selected_province
+        # Reset district về "Trung tâm"
+        st.session_state.district = "Trung tâm"
+        update_coordinates()
+        st.rerun()
+    
+    # Dropdown quận/huyện (chỉ khi tỉnh có dữ liệu quận)
+    district_options = ["Trung tâm"]
+    if st.session_state.province in DISTRICTS:
+        district_options.extend(DISTRICTS[st.session_state.province].keys())
+    
+    selected_district = st.selectbox(
+        "Quận / Huyện (nếu có)",
+        options=district_options,
+        index=district_options.index(st.session_state.district) if st.session_state.district in district_options else 0,
+        key="district_selector"
+    )
+    if selected_district != st.session_state.district:
+        st.session_state.district = selected_district
+        update_coordinates()
         st.rerun()
     
     st.caption(f"📍 Tọa độ: {st.session_state.lat:.5f}, {st.session_state.lon:.5f}")
@@ -126,9 +233,10 @@ conditions = {
 
 lat = st.session_state.lat
 lon = st.session_state.lon
-location_display = st.session_state.location_name
+province_display = st.session_state.province
+district_display = st.session_state.district
 
-# ---------- Custom CSS ----------
+# ---------- Custom CSS (giữ nguyên như cũ, không thay đổi) ----------
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700&display=swap');
@@ -387,7 +495,7 @@ for idx, fc in enumerate(forecast_data):
 # ---------- Footer ----------
 st.markdown(f"""
 <div class="footer-note">
-    <i class="fas fa-map-marker-alt"></i> Địa phương: {location_display} &nbsp;|&nbsp;
+    <i class="fas fa-map-marker-alt"></i> {province_display}{f' - {district_display}' if district_display != "Trung tâm" else ''} &nbsp;|&nbsp;
     <i class="fas fa-globe"></i> Tọa độ: {lat:.5f}, {lon:.5f} &nbsp;|&nbsp;
     <i class="fas fa-database"></i> Dữ liệu: Open-Meteo &nbsp;|&nbsp;
     <i class="fas fa-clock"></i> {datetime.now().strftime('%H:%M:%S %d/%m/%Y')}
